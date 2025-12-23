@@ -1,4 +1,5 @@
 import networkx as nx
+import seaborn as sns
 import random
 import numpy as np
 import pandas as pd
@@ -105,8 +106,7 @@ def simulate_biased_step(G, homophily_alpha=0.1):
         probs = np.array(probs) / sum(probs)
         recipient = np.random.choice(neighbors, p=probs)
         G.nodes[donor]['wealth'] -= 1.0
-        G.nodes[recipient]['wealth'] += 1.1 # 10% growth per transaction
-
+        G.nodes[recipient]['wealth'] += 1.1 
 
 def run_experiment(h_net, s_net, steps=100, alpha=0.2):
     results = []
@@ -115,14 +115,17 @@ def run_experiment(h_net, s_net, steps=100, alpha=0.2):
         simulate_biased_step(s_net, homophily_alpha=alpha)
         # record avg wealth for minority in each model
         h_wealth_B = np.mean([d['wealth'] for n, d in h_net.nodes(data=True) if d['group'] == 'B'])
+        h_wealth_A= np.mean([d['wealth'] for n, d in h_net.nodes(data=True) if d['group'] == 'A'])
         s_wealth_B = np.mean([d['wealth'] for n, d in s_net.nodes(data=True) if d['group'] == 'B'])
+        s_wealth_A= np.mean([d['wealth'] for n, d in s_net.nodes(data=True) if d['group'] == 'A'])
         results.append({
             'step': t,
             'Hierarchy_GroupB': h_wealth_B,
-            'Solidarity_GroupB': s_wealth_B
-        })    
+            'Hierarchy_GroupA': h_wealth_A,
+            'Solidarity_GroupB': s_wealth_B,
+            'Solidarity_GroupA': s_wealth_A
+        })
     return pd.DataFrame(results)
-
 
 def load_nets(hierarchy_path, solidarity_path):
     try:
@@ -139,13 +142,29 @@ def load_nets(hierarchy_path, solidarity_path):
             G.nodes[node]['wealth'] = float(G.nodes[node]['wealth'])
     return h_net, s_net
 
+def plot_wealth_gap(df):
+    plt.figure(figsize=(12, 6))
+    sns.lineplot(data=df, x='step', y='Hierarchy_GroupB', label='Hierarchy (Scale-Free)', color='blue', linewidth=2)
+    sns.lineplot(data=df, x='step', y='Solidarity_GroupB', label='Solidarity (Small-World)', color='green', linewidth=2)
+    plt.title("Minority Wealth Growth: Hierarchy vs. Solidarity Models", fontsize=16)
+    plt.xlabel("Simulation Steps (Time)", fontsize=12)
+    plt.ylabel("Average Wealth of Group B", fontsize=12)
+    plt.legend()
+    plt.grid(True, alpha=0.3)        
+    plt.show()
+
 def main():
     h_net, s_net = load_nets("hierarchy_network.graphml", "solidarity_network.graphml")
     print(f"Hierarchy Nodes: {h_net.number_of_nodes()}, Edges: {h_net.number_of_edges()}")
     print(f"Solidarity Nodes: {s_net.number_of_nodes()}, Edges: {s_net.number_of_edges()}")
-    history = run_experiment(h_net, s_net, steps=2000, alpha=0.3)
-    history.to_csv("simulation_history.csv", index=False)
+    try:
+        history = pd.read_csv("simulation_history.csv")
+        print("Loaded existing simulation history.")
+    except FileNotFoundError:
+        history = run_experiment(h_net, s_net, steps=2000, alpha=0.3)
+        history.to_csv("simulation_history.csv", index=False)
     print(history.tail())
+    plot_wealth_gap(history)
 
 if __name__ == "__main__":
     main()
